@@ -1,76 +1,40 @@
+# HeliosPWM - template entities for Home Assistant.
+# Include with  template: !include template.yaml  (or append the entries to your existing template: list).
+# Derives readable operating hours / months from input_number.ophours_heliospwm and the maintenance flag.
   - sensor:
-      # Betriebsstunden Wohnung in lesbarem Format
-      - name: "Betriebsstunden Wohnung lesbar"
+      # HeliosPWM Operating hours since last reset in readable format
+      - name: "OpHours HeliosPWM Readable"
+        unique_id: c4fe8f72-eec3-4d37-b1ce-06549305cf76
         state: >
-          {% set hours = states('sensor.wohnraum_laufzeit') | float %}
+          {% set hours = states('input_number.ophours_heliospwm') | float(0) %}
           {% set days = (hours / 24) | int %}
           {% set remaining_hours = (hours % 24) | int %}
           {% set minutes = ((hours % 1) * 60) | int %}
           {% if days > 0 %}
-            {{ days }} Tage, {{ remaining_hours }} Stunden, {{ minutes }} Minuten
+            {{ days }} days, {{ remaining_hours }} hours, {{ minutes }} minutes
           {% else %}
-            {{ remaining_hours }} Stunden, {{ minutes }} Minuten
+            {{ remaining_hours }} hours, {{ minutes }} minutes
           {% endif %}
         icon: mdi:clock-time-four
-        availability: "{{ states('sensor.wohnraum_laufzeit') != 'unknown' and states('sensor.betriebsstunden_wohnung') != 'unavailable' }}"
-      # Betriebsstunden Trockenraum in lesbarem Format
-      - name: "Betriebsstunden Trockenraum lesbar"
+        availability: "{{ states('input_number.ophours_heliospwm') not in ['unknown', 'unavailable'] }}"
+      # Operating months (30-day months) since the last reset
+      - name: "OpHours HeliosPWM Months"
+        unique_id: 45ea8b72-202a-4d00-b922-070639d7fa12
         state: >
-          {% set hours = states('sensor.trockenraum_laufzeit') | float %}
-          {% set days = (hours / 24) | int %}
-          {% set remaining_hours = (hours % 24) | int %}
-          {% set minutes = ((hours % 1) * 60) | int %}
-          {% if days > 0 %}
-            {{ days }} Tage, {{ remaining_hours }} Stunden, {{ minutes }} Minuten
-          {% else %}
-            {{ remaining_hours }} Stunden, {{ minutes }} Minuten
-          {% endif %}
-        icon: mdi:clock-time-four
-        availability: "{{ states('sensor.trockenraum_laufzeit') != 'unknown' and states('sensor.betriebsstunden_trockenraum') != 'unavailable' }}"
-      # Optional: Betriebsmonate (30-Tage-Monate)
-      - name: "Betriebsmonate Wohnung"
-        state: >
-          {% set hours = states('sensor.wohnraum_laufzeit') | float %}
+          {% set hours = states('input_number.ophours_heliospwm') | float(0) %}
           {% set days = (hours / 24) | float %}
           {% set months = (days / 30) | round(1) %}
           {{ months }}
-        unit_of_measurement: "Monate"
+        unit_of_measurement: "months"
         icon: mdi:calendar-month
-        availability: "{{ states('sensor.wohnraum_laufzeit') != 'unknown' and states('sensor.betriebsstunden_wohnung') != 'unavailable' }}"
-      - name: "Betriebsmonate Trockenraum"
-        state: >
-          {% set hours = states('sensor.trockenraum_laufzeit') | float %}
-          {% set days = (hours / 24) | float %}
-          {% set months = (days / 30) | round(1) %}
-          {{ months }}
-        unit_of_measurement: "Monate"
-        icon: mdi:calendar-month
-        availability: "{{ states('sensor.trockenraum_laufzeit') != 'unknown' and states('sensor.betriebsstunden_trockenraum') != 'unavailable' }}"
+        availability: "{{ states('input_number.ophours_heliospwm') not in ['unknown', 'unavailable'] }}"
   - binary_sensor:
-      - name: "Wartung Wohnung fällig"
+      - name: "Maint HeliosPWM Due"
+        unique_id: 526bd066-7780-4980-932a-7ff178235238
         state: >
-          {% set schwelle = states('input_number.warnschwelle_luefter_monate') | float %}
-          {% set aktuelle_monate = states('sensor.betriebsmonate_wohnung') | float %}
-          {% set gespeicherte_monate = states('input_number.gespeicherte_betriebsmonate_wohnung') | float %}
-          {% set differenz = aktuelle_monate - gespeicherte_monate %}
-          {% if differenz >= schwelle %}
-            {{ true }}
-          {% else %}
-            {{ false }}
-          {% endif %}
+          {% set threshold = states('input_number.maint_heliospwm_threshold_months') | float(3) %}
+          {% set months = states('sensor.ophours_heliospwm_months') | float(0) %}
+          {{ months >= threshold }}
         icon: mdi:hvac-off
         device_class: problem
-      
-      - name: "Wartung Trockenraum fällig"
-        state: >
-          {% set schwelle = states('input_number.warnschwelle_luefter_monate') | float %}
-          {% set aktuelle_monate = states('sensor.betriebsmonate_trockenraum') | float %}
-          {% set gespeicherte_monate = states('input_number.gespeicherte_betriebsmonate_trockenraum') | float %}
-          {% set differenz = aktuelle_monate - gespeicherte_monate %}
-          {% if differenz >= schwelle %}
-            {{ true }}
-          {% else %}
-            {{ false }}
-          {% endif %}
-        icon: mdi:hvac-off
-        device_class: problem
+        availability: "{{ has_value('sensor.ophours_heliospwm_months') }}"

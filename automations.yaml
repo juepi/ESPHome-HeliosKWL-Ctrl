@@ -1,38 +1,65 @@
-- id: wartung_wohnung_faellig
-  alias: Benachrichtigung Wartung Wohnung
+# HeliosPWM - automations for Home Assistant. Append to your automations.yaml.
+# - maint_heliospwm_due:            notification when the maintenance interval is reached
+# - ophours_heliospwm_store:        mirrors the ESP operating hours into input_number.ophours_heliospwm
+# - maint_heliospwm_reset_detected: records time + notification when the counter is reset on the ESP
+- id: maint_heliospwm_due
+  alias: Maint HeliosPWM Due
   triggers:
   - entity_id:
-    - binary_sensor.wartung_wohnung_fallig
+    - binary_sensor.maint_heliospwm_due
     from: 'off'
     to: 'on'
     trigger: state
   actions:
   - data:
-      title: Wartung der Lüftungsanlage fällig
-      message: 'Die Lüftungsanlage in der Wohnung hat {{ states(''sensor.betriebsmonate_wohnung'')
-        }}  Betriebsmonate erreicht und sollte gewartet werden.
+      title: Ventilation system maintenance due
+      message: 'The ventilation system has reached {{ states(''sensor.ophours_heliospwm_months'')
+        }} operating months and should be serviced.
 
-        Betriebsstunden: {{ states(''sensor.betriebsstunden_wohnung_lesbar'') }}
+        Operating hours: {{ states(''sensor.ophours_heliospwm_readable'') }}
 
         '
-      notification_id: maintenance_wohnung
+      notification_id: maint_heliospwm
     action: persistent_notification.create
-- id: wartung_Trockenraum_faellig
-  alias: Benachrichtigung Wartung Trockenraum
+- id: ophours_heliospwm_store
+  alias: OpHours HeliosPWM Store
+  description: Keeps the last operating hours reported by the ESP, so the ESP can read them after a reboot.
+  mode: queued
   triggers:
   - entity_id:
-    - binary_sensor.wartung_trockenraum_fallig
-    from: 'off'
-    to: 'on'
+    - sensor.heliospwm_operating_hours
+    to:  # null = only real state changes, ignore attribute-only updates
     trigger: state
+  conditions:
+  - condition: template
+    value_template: '{{ is_number(trigger.to_state.state) }}'
   actions:
+  - target:
+      entity_id: input_number.ophours_heliospwm
+    data:
+      value: '{{ trigger.to_state.state | float | round(3) }}'
+    action: input_number.set_value
+- id: maint_heliospwm_reset_detected
+  alias: Maint HeliosPWM Reset Detected
+  description: Detects a reset of the operating hours on the ESP (button "Reset Operating Hours"). The counter only ever decreases on a reset, so a lower value means a reset happened.
+  triggers:
+  - entity_id:
+    - sensor.heliospwm_operating_hours
+    to:
+    trigger: state
+  conditions:
+  - condition: template
+    value_template: >-
+      {{ is_number(trigger.from_state.state) and is_number(trigger.to_state.state)
+         and trigger.to_state.state | float < trigger.from_state.state | float }}
+  actions:
+  - target:
+      entity_id: input_datetime.maint_heliospwm_last_reset
+    data:
+      datetime: '{{ now().strftime(''%Y-%m-%d %H:%M:%S'') }}'
+    action: input_datetime.set_datetime
   - data:
-      title: Wartung der Lüftungsanlage fällig
-      message: 'Die Lüftungsanlage im Trockenraum hat {{ states(''sensor.betriebsmonate_trockenraum'')
-        }}  Betriebsmonate erreicht und sollte gewartet werden.
-
-        Betriebsstunden: {{ states(''sensor.betriebsstunden_trockenraum_lesbar'') }}
-
-        '
-      notification_id: maintenance_trockenraum
+      title: Maintenance warning reset
+      message: 'The operating hours of the fans have been reset after maintenance (previous value: {{ trigger.from_state.state | float | round(1) }} h).'
+      notification_id: maint_heliospwm_reset
     action: persistent_notification.create
