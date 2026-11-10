@@ -1,4 +1,4 @@
-# ESP-PWM-Control-HeliosKWL
+# ESPHome Controller for Helios KWL EC 45-160
 
 ## Preface
 
@@ -15,7 +15,7 @@ It is not a requirement, but i will be using my [ESP-Mini-Base](https://github.c
 
 ## ESP32 control for HELIOS KWL via ESPHome
 
-Controller for the decentralized room ventilation [HELIOS KWL EC 45-160 Verso](https://www.heliosventilatoren.de/at/produkte-at/lueftung-mit-waermerueckgewinnung/einzelraum-lueftungsgeraete/die-power-von-ecoventverso).
+Controller for the decentralized room ventilation [HELIOS KWL EC 45-160 Verso](https://www.heliosventilatoren.de/de/produkte/lueftung-mit-waermerueckgewinnung/einzelraum-lueftungsgeraete/kwl-ec-45-160-09361).
 It drives one pair of alternating (pendulum) fans:
 
 | Fan | Name | PWM GPIO | Mini-Base Connector |
