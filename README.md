@@ -50,8 +50,12 @@ The ESPHome web interface (`http://heliospwm/`, login see Secrets) is grouped fo
 - **Fan Speed**: preset buttons `Off` / `Low` / `Medium` / `High` / `Ultra` (0 / 25 / 50 / 75 / 100 %, from `speed_1..5`)
   plus the slider `Fan Speed [%]` for any value in 25 % steps
 - **Modes**: `Operating Mode` (Pendulum / Supply / Cooking)
-- **Status**: WZ/SZ mode and speed, operating hours
-- **Settings**: upper limit, pendulum interval, mode speeds, operating hours reset
+- **Status**: operating hours
+- **Settings**: upper limit, pendulum interval, mode speeds, operating hours reset, log level
+
+`Log Level` changes the logger level at runtime without reflashing. The default after every boot is
+`INFO`; with `DEBUG` the log additionally shows the mode and speed of each fan (`WZ: Supply, 75%`)
+whenever they change.
 
 `Upper Limit [%]` caps the effective fan speed (`min(Fan Speed, Upper Limit)`), e.g. for a night
 reduction set from Home Assistant. 100 = no limit (default), 0 = fans off. `Fan Speed` itself is
@@ -186,7 +190,7 @@ No script is involved. The ESP must be online for the button to be available.
 | `number.heliospwm_upper_limit` | Speed cap, e.g. night reduction (100 = no limit) |
 | `number.heliospwm_pendulum_interval_s` | Pendulum interval 20–60 s |
 | `number.heliospwm_supply_mode_speed` / `_cooking_mode_speed` | Speed applied when the mode is activated |
-| `sensor.heliospwm_wz_speed` / `_sz_speed`, `sensor.heliospwm_wz_mode` / `_sz_mode` | Current output per fan |
+| `select.heliospwm_log_level` | Logger level at runtime (`INFO` after boot, `DEBUG` for troubleshooting) |
 | `sensor.heliospwm_operating_hours` | Operating hours (ESP counter, hourly) |
 | `input_number.ophours_heliospwm` | Stored operating hours (HA side) |
 | `sensor.ophours_heliospwm_readable` / `_months` | Derived display values |
