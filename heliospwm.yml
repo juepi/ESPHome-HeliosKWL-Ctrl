@@ -1,6 +1,18 @@
 esphome:
   name: heliospwm
   friendly_name: HeliosPWM  # device name in HA; entity IDs become <domain>.heliospwm_<name>
+  # Set both PWM outputs to 50% (fans off) as early as possible, instead of leaving them at
+  # 0% duty until the first run of the fan control loop. Priority 600 runs right after the
+  # ledc outputs (priority 800) have been set up, before WiFi / API.
+  on_boot:
+    - priority: 600
+      then:
+        - output.set_level:
+            id: fan_pwm_wz
+            level: 50%
+        - output.set_level:
+            id: fan_pwm_sz
+            level: 50%
 
 esp32:
   board: lolin_s2_mini
@@ -11,6 +23,9 @@ esp32:
 wifi:
   ssid: !secret wifi_ssid
   password: !secret wifi_password
+  # Never reboot because WiFi is not available: the device must keep running (and counting
+  # operating hours) on its own, operated via the hardware button. It keeps trying to reconnect.
+  reboot_timeout: 0s
 
 # Enable fallback hotspot (captive portal) in case wifi connection fails
 #  ap:
@@ -79,7 +94,7 @@ script:
             return;
           }
           float hours = id(operating_base_hours) + id(operating_ms_counted) / 3600000.0;
-          ESP_LOGI("operating_hours", "Operating hours: %.3f h", hours);
+          ESP_LOGI("operating_hours", "Operating hours: %.1f h", hours);
           id(operating_hours).publish_state(hours);
 
   # Single click: next fan speed from ${button_speeds}
@@ -107,18 +122,26 @@ script:
       - lambda: |-
           static const std::vector<std::string> modes = {${button_modes}};
           if (modes.empty()) return;
-          std::string current = id(operating_mode).state.str();
+          // The current mode is compared by option index (the select has no "state" member
+          // in current ESPHome versions).
+          auto current_index = id(operating_mode).active_index();
           // Next mode in the list after the current one; first entry if not in the list
           size_t next = 0;
+          const char *current = "?";
           for (size_t i = 0; i < modes.size(); i++) {
-            if (modes[i] == current) { next = (i + 1) % modes.size(); break; }
+            auto index = id(operating_mode).index_of(modes[i]);
+            if (current_index.has_value() && index.has_value() && *index == *current_index) {
+              current = modes[i].c_str();
+              next = (i + 1) % modes.size();
+              break;
+            }
           }
           const std::string &target = modes[next];
           if (!id(operating_mode).has_option(target)) {
             ESP_LOGW("button", "Unknown mode '%s' in button_modes", target.c_str());
             return;
           }
-          ESP_LOGI("button", "Mode: %s -> %s", current.c_str(), target.c_str());
+          ESP_LOGI("button", "Mode: %s -> %s", current, target.c_str());
           auto call = id(operating_mode).make_call();
           call.set_option(target);
           call.perform();
@@ -129,13 +152,17 @@ substitutions:
   pendulum_delay_ms: "900"       # Pause in ms during a direction change (fan at 50%)
   # Hardware button
   button_pin: GPIO16
-  # Fan speed presets (in %): used for the preset buttons (web UI / HA) and cycled in this
-  # order by a single click of the hardware button. 0-100, matching the step of "Fan Speed" (5).
-  speed_1: "0"
-  speed_2: "25"
-  speed_3: "50"
-  speed_4: "75"
-  button_speeds: "${speed_1}, ${speed_2}, ${speed_3}, ${speed_4}"
+  # Fan speed presets (in %): used for the preset buttons (web UI / HA). The presets listed in
+  # button_speeds are cycled in this order by a single click of the hardware button.
+  # 0-100, matching the step of "Fan Speed" (25).
+  # The button names (Off / Low / Medium / High / Ultra) are fixed, so changing a value here
+  # does not change the entity IDs in HA. Keep the values in ascending order.
+  speed_1: "0"    # Off
+  speed_2: "25"   # Low
+  speed_3: "50"   # Medium
+  speed_4: "75"   # High
+  speed_5: "100"  # Ultra
+  button_speeds: "${speed_1}, ${speed_2}, ${speed_3}, ${speed_4}"  # Ultra is not part of the button cycle
   # Operating modes cycled by a double click, in this order.
   # Must be options of the "Operating Mode" select: "Pendulum", "Supply", "Cooking"
   button_modes: '"Pendulum", "Cooking"'
@@ -163,6 +190,7 @@ number:
     initial_value: 0
     restore_value: true  # keep the speed across reboots / OTA updates
     optimistic: true
+    unit_of_measurement: "%"
     mode: slider
     icon: "mdi:fan"
     web_server:
@@ -180,6 +208,7 @@ number:
     initial_value: 100
     restore_value: true
     optimistic: true
+    unit_of_measurement: "%"
     mode: slider
     icon: "mdi:percent"
     web_server:
@@ -308,7 +337,7 @@ sensor:
     device_class: duration
     state_class: total_increasing
     icon: "mdi:timer-cog-outline"
-    accuracy_decimals: 2
+    accuracy_decimals: 1
     update_interval: never
     web_server:
       sorting_group_id: grp_status
@@ -325,14 +354,14 @@ sensor:
             if (id(operating_base_known) || std::isnan(x)) return;
             id(operating_base_hours) = x;
             id(operating_base_known) = true;
-            ESP_LOGI("operating_hours", "Base value from HA: %.3f h (+ %.3f h counted since boot)",
+            ESP_LOGI("operating_hours", "Base value from HA: %.1f h (+ %.1f h counted since boot)",
                      x, id(operating_ms_counted) / 3600000.0);
         - script.execute: publish_operating_hours
 
 # Fan speed preset buttons (web UI / HA) and reset of the operating hours
 button:
   - platform: template
-    name: "Fan ${speed_1} %"
+    name: "Off"
     id: fan_preset_1
     icon: "mdi:fan-off"
     on_press:
@@ -344,7 +373,7 @@ button:
       sorting_weight: 11
 
   - platform: template
-    name: "Fan ${speed_2} %"
+    name: "Low"
     id: fan_preset_2
     icon: "mdi:fan-speed-1"
     on_press:
@@ -356,7 +385,7 @@ button:
       sorting_weight: 12
 
   - platform: template
-    name: "Fan ${speed_3} %"
+    name: "Medium"
     id: fan_preset_3
     icon: "mdi:fan-speed-2"
     on_press:
@@ -368,7 +397,7 @@ button:
       sorting_weight: 13
 
   - platform: template
-    name: "Fan ${speed_4} %"
+    name: "High"
     id: fan_preset_4
     icon: "mdi:fan-speed-3"
     on_press:
@@ -378,6 +407,18 @@ button:
     web_server:
       sorting_group_id: grp_speed
       sorting_weight: 14
+
+  - platform: template
+    name: "Ultra"
+    id: fan_preset_5
+    icon: "mdi:fan-plus"
+    on_press:
+      - number.set:
+          id: fan_speed
+          value: ${speed_5}
+    web_server:
+      sorting_group_id: grp_speed
+      sorting_weight: 15
 
   - platform: template
     name: "Reset Operating Hours"

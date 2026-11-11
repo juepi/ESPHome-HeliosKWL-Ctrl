@@ -2,6 +2,7 @@
 # - maint_heliospwm_due:            notification when the maintenance interval is reached
 # - ophours_heliospwm_store:        mirrors the ESP operating hours into input_number.ophours_heliospwm
 # - maint_heliospwm_reset_detected: records time + notification when the counter is reset on the ESP
+#                                   (stored value drops), dismisses the "maintenance due" notification
 - id: maint_heliospwm_due
   alias: Maint HeliosPWM Due
   triggers:
@@ -37,20 +38,21 @@
   - target:
       entity_id: input_number.ophours_heliospwm
     data:
-      value: '{{ trigger.to_state.state | float | round(3) }}'
+      value: '{{ trigger.to_state.state | float | round(1) }}'
     action: input_number.set_value
 - id: maint_heliospwm_reset_detected
   alias: Maint HeliosPWM Reset Detected
-  description: Detects a reset of the operating hours on the ESP (button "Reset Operating Hours"). The counter only ever decreases on a reset, so a lower value means a reset happened.
+  description: Detects a reset of the operating hours on the ESP (button "Reset Operating Hours"). The counter only ever decreases on a reset, so a lower stored value means a reset happened. Watches the stored value (input_number) instead of the ESP sensor, so a reset done while the ESP was not connected to HA is detected as well.
   triggers:
   - entity_id:
-    - sensor.heliospwm_operating_hours
+    - input_number.ophours_heliospwm
     to:
     trigger: state
   conditions:
   - condition: template
     value_template: >-
-      {{ is_number(trigger.from_state.state) and is_number(trigger.to_state.state)
+      {{ trigger.from_state is not none and trigger.to_state is not none
+         and is_number(trigger.from_state.state) and is_number(trigger.to_state.state)
          and trigger.to_state.state | float < trigger.from_state.state | float }}
   actions:
   - target:
@@ -58,6 +60,9 @@
     data:
       datetime: '{{ now().strftime(''%Y-%m-%d %H:%M:%S'') }}'
     action: input_datetime.set_datetime
+  - data:
+      notification_id: maint_heliospwm
+    action: persistent_notification.dismiss
   - data:
       title: Maintenance warning reset
       message: 'The operating hours of the fans have been reset after maintenance (previous value: {{ trigger.from_state.state | float | round(1) }} h).'

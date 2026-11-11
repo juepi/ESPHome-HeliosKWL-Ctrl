@@ -2,12 +2,12 @@
 
 ## Preface
 
-This is a fork of [Fotoeddy's ESPHome based controller](https://github.com/fototeddy/ESP-PWM-Control-HeliosKWL/issues), thanks a lot for his work!  
+This is a fork of [Fototeddy's ESPHome based controller](https://github.com/fototeddy/ESP-PWM-Control-HeliosKWL/issues), thanks a lot for his work!  
 I've modified the code for my needs, mainly:
 - Control a single pair of KWL fans
 - Adopted operational modes and possible settings
 - Adopted logic for counting power-on-hours (using API time from HA)
-- Allow controller to fully operate without Homematic
+- Allow controller to fully operate without HomeAssistant
   - either via Webinterface or
   - by using a hardware button
 
@@ -47,7 +47,7 @@ The actual PWM output to the fans is limited to 4% to 96% (spec for installed [e
 
 The ESPHome web interface (`http://heliospwm/`, login see Secrets) is grouped for use on a phone:
 
-- **Fan Speed**: preset buttons `Fan 0 %` / `Fan 25 %` / `Fan 50 %` / `Fan 75 %` (from `speed_1..4`)
+- **Fan Speed**: preset buttons `Off` / `Low` / `Medium` / `High` / `Ultra` (0 / 25 / 50 / 75 / 100 %, from `speed_1..5`)
   plus the slider `Fan Speed [%]` for any value in 25 % steps
 - **Modes**: `Operating Mode` (Pendulum / Supply / Cooking)
 - **Status**: WZ/SZ mode and speed, operating hours
@@ -57,23 +57,25 @@ The ESPHome web interface (`http://heliospwm/`, login see Secrets) is grouped fo
 reduction set from Home Assistant. 100 = no limit (default), 0 = fans off. `Fan Speed` itself is
 not changed, so the previous speed applies again as soon as the limit is lifted.
 
-The preset buttons are also available in Home Assistant (`button.heliospwm_fan_0`, …).
+The preset buttons are also available in Home Assistant (`button.heliospwm_off`, `_low`, `_medium`, `_high`, `_ultra`). Their names are fixed, so changing a preset value does not change the entity IDs.
 
 ## Hardware button
 
 A push button on GPIO16 (Mini-Base SW1) allows local control:
 
-- **Single click**: cycles the fan speed through 0% → 25% → 50% → 75% → 0% …
+- **Single click**: cycles the fan speed through 0% → 25% → 50% → 75% → 0% … (`Ultra` / 100% is not part of the cycle)
 - **Double click**: cycles the operating mode through Pendulum → Cooking → Pendulum …
 
 Both lists can be adapted in the `substitutions` section of `heliospwm.yml`:
 
 ```yaml
 button_pin: GPIO16
-speed_1: "0"                            # fan speed presets, 0-100 in steps of 5;
-speed_2: "25"                           # used for the preset buttons (web UI / HA)
-speed_3: "50"                           # and cycled by the hardware button
-speed_4: "75"
+speed_1: "0"                            # Off     fan speed presets
+speed_2: "25"                           # Low     used for the preset buttons (web UI / HA)
+speed_3: "50"                           # Medium  and cycled by the hardware button
+speed_4: "75"                           # High
+speed_5: "100"                          # Ultra
+button_speeds: "${speed_1}, ${speed_2}, ${speed_3}, ${speed_4}"   # presets cycled by the hardware button
 button_modes: '"Pendulum", "Cooking"'   # options of "Operating Mode": "Pendulum", "Supply", "Cooking"
 ```
 
@@ -149,7 +151,7 @@ the ESP so it picks up the new base value.
 Entity IDs are derived from the device name, e.g. `number.heliospwm_fan_speed`,
 `select.heliospwm_operating_mode`, `sensor.heliospwm_operating_hours`,
 `button.heliospwm_reset_operating_hours`. Verify this one in particular, it is referenced by the
-automations `ophours_heliospwm_store` and `maint_heliospwm_reset_detected`:
+automation `ophours_heliospwm_store`:
 
 - `sensor.heliospwm_operating_hours`
 
@@ -167,8 +169,10 @@ Press **Reset Operating Hours** (`button.heliospwm_reset_operating_hours`) in Ho
 ESP web UI. The ESP sets its counter to 0 and reports it immediately; Home Assistant then
 
 - stores the 0 in `input_number.ophours_heliospwm` (automation `ophours_heliospwm_store`),
-- records the time in `input_datetime.maint_heliospwm_last_reset` and posts a notification
-  (automation `maint_heliospwm_reset_detected`, triggered by the value dropping).
+- records the time in `input_datetime.maint_heliospwm_last_reset`, dismisses the "maintenance due"
+  notification and posts a reset notification (automation `maint_heliospwm_reset_detected`,
+  triggered by the stored value dropping; this also works if the reset was done in the web UI
+  while Home Assistant was not connected).
 
 No script is involved. The ESP must be online for the button to be available.
 
@@ -177,7 +181,7 @@ No script is involved. The ESP must be online for the button to be available.
 | Entity | Purpose |
 |---|---|
 | `number.heliospwm_fan_speed` | Fan speed 0–100 % (25 % steps) |
-| `button.heliospwm_fan_0` … `_75` | Speed presets |
+| `button.heliospwm_off` / `_low` / `_medium` / `_high` / `_ultra` | Speed presets (0 / 25 / 50 / 75 / 100 %) |
 | `select.heliospwm_operating_mode` | Operating mode: Pendulum / Supply / Cooking |
 | `number.heliospwm_upper_limit` | Speed cap, e.g. night reduction (100 = no limit) |
 | `number.heliospwm_pendulum_interval_s` | Pendulum interval 20–60 s |

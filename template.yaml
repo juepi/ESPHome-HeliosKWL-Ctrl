@@ -9,11 +9,10 @@
           {% set hours = states('input_number.ophours_heliospwm') | float(0) %}
           {% set days = (hours / 24) | int %}
           {% set remaining_hours = (hours % 24) | int %}
-          {% set minutes = ((hours % 1) * 60) | int %}
           {% if days > 0 %}
-            {{ days }} days, {{ remaining_hours }} hours, {{ minutes }} minutes
+            {{ days }} days, {{ remaining_hours }} hours
           {% else %}
-            {{ remaining_hours }} hours, {{ minutes }} minutes
+            {{ remaining_hours }} hours
           {% endif %}
         icon: mdi:clock-time-four
         availability: "{{ states('input_number.ophours_heliospwm') not in ['unknown', 'unavailable'] }}"
