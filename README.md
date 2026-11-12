@@ -7,11 +7,10 @@ I've modified the code for my needs, mainly:
 - Control a single pair of KWL fans
 - Adopted operational modes and possible settings
 - Adopted logic for counting power-on-hours (using API time from HA)
+- Minimized communication between ESP and HA (-> now running on WiFi)
 - Allow controller to fully operate without HomeAssistant
   - either via Webinterface or
   - by using a hardware button
-
-It is not a requirement, but i will be using my [ESP-Mini-Base](https://github.com/juepi/ESP-Mini-Base) with a Wemos S2 Mini. As the Mini-Base already has several N-channel MOSFETs onboard which can be used for triggering the PWM signals for the fans (pull-down to GND) i have removed the schematic files and hardware related infos.
 
 ## ESP32 control for HELIOS KWL via ESPHome
 
@@ -22,6 +21,8 @@ It drives one pair of alternating (pendulum) fans:
 |-----|------|-------|--------|
 | 1   | WZ   | GPIO1 | J1.1 |
 | 2   | SZ   | GPIO2 | J1.2 |
+
+I will be using my [ESP-Mini-Base](https://github.com/juepi/ESP-Mini-Base) with a Wemos S2 Mini, as it already has several N-channel MOSFETs onboard which can be used for triggering the PWM signals for the fans (pull-down to GND) without any additionaly hardware. Thus i have removed the schematic files and hardware related infos. The Mini-Base will be powered from the same 12VDC source as the fans (and the original Helios controller).
 
 Device name in Home Assistant: **HeliosPWM** (entity IDs `*.heliospwm_<name>`, e.g. `sensor.heliospwm_operating_hours`).
 
@@ -37,11 +38,14 @@ One of the following `Operating Mode` can be selected:
 - **Cooking**: The SZ fan runs on supply air, the WZ fan on exhaust air (to avoid smells being dragged to the bedroom)
 
 > [!IMPORTANT]
-> Both cooking mode and supply mode are not recommended to run for a longer time period during winter to avoid condensation issues!
+> Both cooking mode and supply mode are not recommended to run for a longer time period during winter to avoid condensation issues at the supply fan!
 
 Selecting Supply or Cooking sets the fan speed to the value configured in `Supply Mode Speed [%]` /
 `Cooking Mode Speed [%]` (0-100 % in 25 % steps, default 50 %). The speed is not changed when switching back to Pendulum.  
-The actual PWM output to the fans is limited to 4% to 96% (spec for installed [ebmpapst fans](https://at.farnell.com/ebm-papst/4412fgpr-203/axiall-fter-127mm-12v-dc-0-16a/dp/2914153)), additionally the range between 41% and 59% PWM duty cycle is treated as off (which means that the minimum operating `fan_speed` is **20%**).
+The actual PWM output to the fans is limited to 4% to 96% (spec for installed [ebmpapst fans type 4412FGPR-203](https://at.farnell.com/ebm-papst/4412fgpr-203/axiall-fter-127mm-12v-dc-0-16a/dp/2914153)).
+
+> [!NOTE]
+> It is a safe approach to treat the range between 41% and 59% PWM duty cycle as off because the fans have an on/off hysteresis within that range. This means that the minimum operating "Fan Speed" should not be below **20%**. This is not explicitely coded, however the speed configuration steps are set to 25%, so we're safe.
 
 ## Web interface
 
